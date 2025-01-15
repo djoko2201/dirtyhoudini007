@@ -1,54 +1,54 @@
 import gradio as gr
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
-# Laden des GPT-2 Modells und Tokenizers
-model_name = "gpt2"
+# Lade das Modell und Tokenizer
+model_name = "gpt2"  # Hier das Modell auswählen
 model = GPT2LMHeadModel.from_pretrained(model_name)
 tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 
-# Anpassung der Antwortgenerierung mit erweiterten Sampling-Techniken und maximaler Leistung
+# Funktion zur Antwortgenerierung
+conversation_history = []  # Liste für das Gedächtnis der Konversation
+
 def generate_response(input_text):
-    # Tokenisiere den Eingabetext
-    inputs = tokenizer.encode(input_text, return_tensors="pt")
+    global conversation_history  # Zugriff auf das globale Gedächtnis
     
-    # Konfiguration der Antwortgenerierung (maximiert für beste Leistung und Präzision)
-    outputs = model.generate(
-        inputs,
-        max_length=150,  # Maximale Textlänge für präzisere Antworten
-        min_length=50,   # Minimale Textlänge für vollständige Antworten
-        temperature=0.0,  # Bestimmt die Deterministik der Antwort (maximal fokussiert)
-        top_p=0.95,      # Top-p Sampling, um die Antwortqualität zu maximieren (höhere Wahrscheinlichkeit für diverse Antworten)
-        top_k=50,        # Begrenzung der möglichen nächsten Tokens (für fokussierte und präzise Antworten)
-        no_repeat_ngram_size=3,  # Verhindert Wiederholungen von N-Grammen (Kohärenz)
-        repetition_penalty=2.0,  # Bestraft Wiederholungen (für präzisere und weniger redundante Antworten)
-        length_penalty=1.0,      # Optimierung der Textlänge
-        num_return_sequences=1,  # Eine einzige Antwort zurückgeben (vermeidet unnötige Ergebnisse)
-        eos_token_id=tokenizer.eos_token_id,  # Modellsoll korrekt stoppen
-        bad_words_ids=[tokenizer.encode(t)[0] for t in ['Hass', 'Gewalt']],  # Verhindert toxische Antworten
-        pad_token_id=tokenizer.eos_token_id,  # Sicherstellen, dass das Modell korrekt stoppt
-        no_repeat_ngram_size=3,  # Verhindert Wiederholungen
-        do_sample=False          # Keine Zufallselemente, deterministische Antwort
-    )
-    
-    # Dekodiere die Antwort
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return response
+    try:
+        # Wenn es eine Konversation gibt, füge die Eingabe und Antwort zum Gedächtnis hinzu
+        conversation_history.append(f"User: {input_text}")
+        
+        # Kodieren der Eingabe
+        inputs = tokenizer.encode(input_text, return_tensors="pt")
+        
+        # Hier verwenden wir die Parameter, die toxische Filter verhindern
+        outputs = model.generate(inputs,
+                                 temperature=0.0,  # Keine Zufälligkeit für deterministische Antworten
+                                 max_length=500,   # Maximale Länge der Antwort
+                                 top_k=50,         # Top-K Sampling
+                                 top_p=0.95,       # Top-P Sampling
+                                 no_repeat_ngram_size=3,  # Verhindert die Wiederholung von n-grams
+                                 do_sample=False,  # Verhindert probabilistisches Sampling
+                                 pad_token_id=tokenizer.eos_token_id)  # Kein Padding, nur Ende-Token
 
-# Gradio Interface mit maximierter Antwortqualität
-iface = gr.Interface(
-    fn=generate_response,
-    inputs="text",
-    outputs="text",
-    live=True,
-    allow_flagging="never",  # Flagging deaktivieren, keine Benutzer-Feedback-Aufforderung
-    title="Optimierter GPT-2 Chatbot",
-    description="Ein hochoptimierter GPT-2-Chatbot für präzise und fokussierte Antworten.",
-    theme="dark",  # Dunkles Design für bessere Lesbarkeit
-    examples=[
-        ["Wie funktioniert maschinelles Lernen?"],
-        ["Was ist der Unterschied zwischen KI und maschinellem Lernen?"],
-        ["Erkläre den Unterschied zwischen Supervised und Unsupervised Learning."]
-    ]
-)
+        # Die generierte Antwort dekodieren
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-iface.launch()
+        # Füge die Antwort auch zum Gedächtnis hinzu
+        conversation_history.append(f"Bot: {response}")
+
+        # Rückgabe der Antwort
+        return response
+
+    except Exception as e:
+        # Fehlerbehandlung bei Problemen
+        return f"Fehler: {str(e)}"
+
+# Gradio-Interface erstellen
+interface = gr.Interface(fn=generate_response, 
+                         inputs="text", 
+                         outputs="text", 
+                         live=True,  # Option für Live-Updates
+                         title="GPT-2 Konversationsbot", 
+                         description="Ein GPT-2 basierter Bot, der sich an den Verlauf erinnert")
+
+# Starte das Interface
+interface.launch()
