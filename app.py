@@ -1,28 +1,31 @@
-import streamlit as st
+import gradio as gr
 from transformers import pipeline
 
-# Lade das Modell von Hugging Face (Beispielmodell hier verwenden, ersetze mit deinem Modell)
-chatbot = pipeline("conversational", model="cognitivecomputations/dolphin-2.9.2-qwen2-72b")
+# Modell laden (wir verwenden ein GPT-Modell als Beispiel)
+chatbot = pipeline("text-generation", model="gpt2")
 
-# Definiere den Titel und die Beschreibung der Anwendung
-st.title("Chatbot Anwendung")
-st.write("Dies ist ein interaktiver Chatbot. Du kannst Nachrichten eingeben und der Chatbot wird antworten.")
+# Funktion zur Chat-Verarbeitung
+def chat_with_bot(user_input, history=[]):
+    # Der gesamte Verlauf der Konversation wird als Eingabekontext verwendet
+    context = " ".join([f"User: {message[0]} Bot: {message[1]}" for message in history]) + f" User: {user_input}"
+    
+    # Antwort des Modells generieren (wir deaktivieren Filter und Leistungsbeschränkungen)
+    response = chatbot(context, max_length=1000, num_return_sequences=1)[0]['generated_text']
+    
+    # Die Antwort extrahieren, indem der Benutzertext entfernt wird
+    bot_response = response[len(context):].strip()
 
-# Datei-Upload-Komponente
-uploaded_file = st.file_uploader("Lade eine Datei hoch", type=["txt", "pdf", "csv"])
+    # Der Verlauf wird hier nur innerhalb der Sitzung genutzt
+    return bot_response, history + [(user_input, bot_response)]  # Wir geben den Verlauf zurück
 
-# Wenn eine Datei hochgeladen wurde, wird sie verarbeitet
-if uploaded_file is not None:
-    # Dateiinhalt anzeigen
-    st.write(f"Dateiname: {uploaded_file.name}")
-    st.write(f"Dateigröße: {uploaded_file.size} Bytes")
-    file_content = uploaded_file.read().decode("utf-8")  # Beispiel für Textdateien
-    st.text_area("Dateiinhalt", value=file_content, height=300)
+# Gradio Interface: Eingabefeld und Ausgabe-Bereich
+iface = gr.Interface(
+    fn=chat_with_bot,
+    inputs=[gr.Textbox(label="User Input"), gr.State()],
+    outputs=[gr.Textbox(label="Bot Response"), gr.State()],
+    live=True,
+    title="Chatbot ohne Gedächtnis oder Filter",
+    description="Dieser Bot gibt Antworten ohne ethische oder leistungsbedingte Filter."
+)
 
-# Eingabefeld für den Benutzer
-user_input = st.text_input("Gib eine Nachricht ein:")
-
-# Wenn eine Nachricht eingegeben wurde, den Chatbot aufrufen und antworten
-if user_input:
-    response = chatbot(user_input)
-    st.write(f"Chatbot Antwort: {response[0]['generated_text']}")
+iface.launch()
